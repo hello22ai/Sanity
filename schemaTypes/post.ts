@@ -1,0 +1,181 @@
+import {defineField, defineType} from 'sanity'
+import {ComposeIcon, EarthGlobeIcon} from '@sanity/icons'
+
+export const post = defineType({
+  name: 'post',
+  title: 'Blog Post',
+  type: 'document',
+  groups: [
+    {name: 'content', title: 'Content', icon: ComposeIcon, default: true},
+    {name: 'seo', title: 'SEO', icon: EarthGlobeIcon},
+  ],
+  fieldsets: [
+    {
+      name: 'searchEngine',
+      title: '🔍 Search Engine (Google)',
+      options: {collapsible: true, collapsed: false},
+    },
+    {
+      name: 'social',
+      title: '📣 Social Sharing (Open Graph)',
+      options: {collapsible: true, collapsed: false},
+    },
+    {
+      name: 'advanced',
+      title: '⚙️ Advanced',
+      options: {collapsible: true, collapsed: true},
+    },
+  ],
+  fields: [
+    // ── Content ──────────────────────────────────────────────
+    defineField({
+      name: 'title',
+      title: 'Title',
+      type: 'string',
+      group: 'content',
+      validation: (rule) => rule.required(),
+    }),
+    defineField({
+      name: 'slug',
+      title: 'Slug',
+      type: 'slug',
+      group: 'content',
+      options: {source: 'title'},
+      validation: (rule) => rule.required(),
+    }),
+    defineField({
+      name: 'description',
+      title: 'Short Description',
+      type: 'text',
+      rows: 3,
+      group: 'content',
+    }),
+    defineField({
+      name: 'featureImage',
+      title: 'Feature Image',
+      type: 'image',
+      group: 'content',
+      options: {hotspot: true},
+      fields: [
+        defineField({
+          name: 'alt',
+          title: 'Alt Text',
+          type: 'string',
+        }),
+      ],
+    }),
+    defineField({
+      name: 'publishedAt',
+      title: 'Published At',
+      type: 'datetime',
+      group: 'content',
+    }),
+    defineField({
+      name: 'body',
+      title: 'Body',
+      type: 'array',
+      group: 'content',
+      of: [{type: 'block'}, {type: 'image', options: {hotspot: true}}],
+    }),
+
+    // ── SEO: Search Engine ───────────────────────────────────
+    defineField({
+      name: 'seoTitle',
+      title: 'SEO Title',
+      type: 'string',
+      group: 'seo',
+      fieldset: 'searchEngine',
+      description: 'Title for search engines — keep under 60 characters (falls back to post title)',
+      validation: (rule) =>
+        rule.max(60).warning('SEO titles longer than 60 characters get cut off in Google'),
+    }),
+    defineField({
+      name: 'seoDescription',
+      title: 'SEO Description',
+      type: 'text',
+      rows: 3,
+      group: 'seo',
+      fieldset: 'searchEngine',
+      description:
+        'Meta description — keep under 160 characters (falls back to description)',
+      validation: (rule) =>
+        rule.max(160).warning('Meta descriptions longer than 160 characters get cut off in Google'),
+    }),
+    defineField({
+      name: 'tags',
+      title: 'Tags',
+      type: 'array',
+      group: 'seo',
+      fieldset: 'searchEngine',
+      of: [{type: 'string'}],
+      options: {layout: 'tags'},
+    }),
+
+    // ── SEO: Open Graph ──────────────────────────────────────
+    defineField({
+      name: 'ogTitle',
+      title: 'Open Graph Title',
+      type: 'string',
+      group: 'seo',
+      fieldset: 'social',
+      description: 'Title shown when shared on social media (falls back to SEO title)',
+    }),
+    defineField({
+      name: 'ogDescription',
+      title: 'Open Graph Description',
+      type: 'text',
+      rows: 3,
+      group: 'seo',
+      fieldset: 'social',
+      description: 'Description shown when shared on social media (falls back to SEO description)',
+    }),
+
+    // ── SEO: Advanced ────────────────────────────────────────
+    defineField({
+      name: 'canonicalUrl',
+      title: 'Canonical Link',
+      type: 'url',
+      group: 'seo',
+      fieldset: 'advanced',
+      description: 'Canonical URL if this content exists elsewhere',
+    }),
+    defineField({
+      name: 'schemaMarkup',
+      title: 'Schema Markup (JSON-LD)',
+      type: 'text',
+      rows: 8,
+      group: 'seo',
+      fieldset: 'advanced',
+      description: 'Paste raw JSON-LD structured data (must be valid JSON)',
+      validation: (rule) =>
+        rule.custom((value) => {
+          if (!value) return true
+          try {
+            JSON.parse(value)
+            return true
+          } catch {
+            return 'Must be valid JSON'
+          }
+        }),
+    }),
+  ],
+  orderings: [
+    {
+      title: 'Published Date (newest first)',
+      name: 'publishedAtDesc',
+      by: [{field: 'publishedAt', direction: 'desc'}],
+    },
+    {
+      title: 'Title A→Z',
+      name: 'titleAsc',
+      by: [{field: 'title', direction: 'asc'}],
+    },
+  ],
+  preview: {
+    select: {
+      title: 'title',
+      subtitle: 'description',
+      media: 'featureImage',
+    },
+  },
+})
