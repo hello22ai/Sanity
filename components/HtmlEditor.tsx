@@ -72,12 +72,16 @@ function ensureStudioCss() {
     .sun-editor .se-resizing-bar{border-radius:0 0 4px 4px}
     .sun-editor-editable{padding:16px 20px}
     .sun-editor-editable img{max-width:100%;height:auto}
+    .sun-editor-editable strong,.sun-editor-editable b{font-weight:700}
+    .sun-editor-editable em,.sun-editor-editable i{font-style:italic}
+    .sun-editor-editable u{text-decoration:underline}
+    .sun-editor-editable s,.sun-editor-editable strike,.sun-editor-editable del{text-decoration:line-through}
   `
   document.head.appendChild(style)
 }
 
 export function HtmlEditor(props: StringInputProps) {
-  const {value, onChange} = props
+  const {value, onChange, readOnly} = props
   const client = useClient({apiVersion: '2024-01-01'})
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -87,8 +91,12 @@ export function HtmlEditor(props: StringInputProps) {
   clientRef.current = client
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const readOnlyRef = useRef(readOnly)
+  readOnlyRef.current = readOnly
   const internalValue = useRef<string | undefined>(undefined)
   const debounceTimer = useRef<number | undefined>(undefined)
+  // abhi tak save na hua content (debounce window ke andar) — navigate/close par flush hota hai
+  const pendingRef = useRef<string | null>(null)
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -162,16 +170,45 @@ export function HtmlEditor(props: StringInputProps) {
       return core.cleanHTML(inlined, core.pasteTagsWhitelistRegExp, core.pasteTagsBlacklistRegExp)
     }
 
+    const commitContents = (contents: string) => {
+      // khali editor "<p><br></p>" deta hai — usko unset karo taaki field clean rahe
+      const text = contents.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim()
+      const hasMedia = /<(img|iframe|table|video|hr)[\s>]/i.test(contents)
+      onChangeRef.current(text || hasMedia ? set(contents) : unset())
+    }
+    // debounce window ke andar user navigate/blur kare to pending change turant save
+    const flushPending = () => {
+      if (pendingRef.current == null) return
+      window.clearTimeout(debounceTimer.current)
+      const contents = pendingRef.current
+      pendingRef.current = null
+      commitContents(contents)
+    }
+
     editor.onChange = (contents: string) => {
+      // read-only document (e.g. Published perspective) par patch mat bhejo —
+      // warna "Attempted to patch a read-only document" error aata hai
+      if (readOnlyRef.current) return
       internalValue.current = contents
+      pendingRef.current = contents
       window.clearTimeout(debounceTimer.current)
       debounceTimer.current = window.setTimeout(() => {
-        // khali editor "<p><br></p>" deta hai — usko unset karo taaki field clean rahe
-        const text = contents.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim()
-        const hasMedia = /<(img|iframe|table|video|hr)[\s>]/i.test(contents)
-        onChangeRef.current(text || hasMedia ? set(contents) : unset())
+        pendingRef.current = null
+        commitContents(contents)
       }, 350)
     }
+
+    // editor se bahar click karte hi (doosra field, doosri jagah) pending save flush
+    editor.onBlur = () => flushPending()
+
+    // browser tab/window band karne par agar save pending ho to warn karo
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingRef.current != null) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     // Images → Sanity assets (undefined return = uploadHandler ka intezaar, SunEditor docs)
     editor.onImageUploadBefore = (files, _info, _core, uploadHandler) => {
@@ -191,6 +228,9 @@ export function HtmlEditor(props: StringInputProps) {
     }
 
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // doosre document/page par jaane se pehle aakhri change save kar do
+      flushPending()
       window.clearTimeout(debounceTimer.current)
       restoreFromFullscreen()
       editor.destroy()
@@ -198,6 +238,11 @@ export function HtmlEditor(props: StringInputProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // readOnly document (Published perspective, insufficient permissions) → editor lock
+  useEffect(() => {
+    editorRef.current?.readOnly(Boolean(readOnly))
+  }, [readOnly])
 
   // Document-level external change (revert, publish, history) — editor mein sync karo
   useEffect(() => {
