@@ -22,6 +22,23 @@ const BUTTONS = [
   ['codeView', 'fullScreen'],
 ]
 
+// SunEditor apni width target <textarea> se copy karta hai (hidden textarea =
+// ~185px) — isliye 100% force. Baaki rules Studio ke look se blend karne ke liye.
+const STYLE_ID = 'suneditor-studio-css'
+function ensureStudioCss() {
+  if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = `
+    .sun-editor{width:100% !important;border-radius:4px;overflow:hidden}
+    .sun-editor .se-toolbar{border-radius:4px 4px 0 0}
+    .sun-editor .se-resizing-bar{border-radius:0 0 4px 4px}
+    .sun-editor-editable{padding:16px 20px}
+    .sun-editor-editable img{max-width:100%;height:auto}
+  `
+  document.head.appendChild(style)
+}
+
 export function HtmlEditor(props: StringInputProps) {
   const {value, onChange} = props
   const client = useClient({apiVersion: '2024-01-01'})
@@ -37,20 +54,53 @@ export function HtmlEditor(props: StringInputProps) {
   const debounceTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    if (!textareaRef.current) return undefined
+    const textarea = textareaRef.current
+    if (!textarea) return undefined
+    ensureStudioCss()
 
-    const editor = suneditor.create(textareaRef.current, {
+    const editor = suneditor.create(textarea, {
       plugins,
       buttonList: BUTTONS,
       formats: ['p', 'h2', 'h3', 'h4', 'blockquote'],
+      // width 100% zaroori hai — warna editor hidden textarea jitna patla banta hai
+      width: '100%',
       height: '480px',
       minHeight: '280px',
+      // Studio ke scroll panes mein sticky toolbar flicker karta hai — off
+      stickyToolbar: -1,
+      // 'full' dialogs position:fixed use karte hain jo Studio ke transformed
+      // panes mein toot jata hai (screen blink) — 'local' editor ke andar khulta hai
+      popupDisplay: 'local',
       defaultStyle: 'font-family: inherit; font-size: 15px; line-height: 1.7;',
     })
     editorRef.current = editor
     if (value) {
       editor.setContents(value)
       internalValue.current = value
+    }
+
+    // Fullscreen fix: Studio ke panes CSS transform use karte hain, jisse
+    // position:fixed pane ke andar qaid ho jata hai. Toggle par editor ko
+    // <body> mein le jao (placeholder se wapas usi jagah laane ke liye).
+    const topEl = textarea.nextElementSibling as HTMLElement | null
+    let fsPlaceholder: Comment | null = null
+    const restoreFromFullscreen = () => {
+      if (!topEl || !fsPlaceholder) return
+      fsPlaceholder.parentNode?.insertBefore(topEl, fsPlaceholder)
+      fsPlaceholder.remove()
+      fsPlaceholder = null
+      topEl.style.zIndex = ''
+    }
+    editor.toggleFullScreen = (isFullScreen: boolean) => {
+      if (!topEl) return
+      if (isFullScreen && !fsPlaceholder) {
+        fsPlaceholder = document.createComment('suneditor-fullscreen')
+        topEl.parentNode?.insertBefore(fsPlaceholder, topEl)
+        document.body.appendChild(topEl)
+        topEl.style.zIndex = '9999'
+      } else if (!isFullScreen) {
+        restoreFromFullscreen()
+      }
     }
 
     editor.onChange = (contents: string) => {
@@ -83,6 +133,7 @@ export function HtmlEditor(props: StringInputProps) {
 
     return () => {
       window.clearTimeout(debounceTimer.current)
+      restoreFromFullscreen()
       editor.destroy()
       editorRef.current = null
     }
@@ -100,5 +151,5 @@ export function HtmlEditor(props: StringInputProps) {
     }
   }, [value])
 
-  return <textarea ref={textareaRef} style={{visibility: 'hidden'}} defaultValue="" />
+  return <textarea ref={textareaRef} style={{display: 'none'}} defaultValue="" />
 }

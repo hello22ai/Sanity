@@ -17,10 +17,10 @@
   "dependencies": {
     "@portabletext/block-tools": "^5.1.11",
     "@sanity/table": "^3.1.8",
-    "@sanity/vision": "^6.4.0",
+    "@sanity/vision": "^6.5.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sanity": "^6.4.0",
+    "sanity": "^6.5.0",
     "styled-components": "^6.1.18",
     "suneditor": "^2.47.8"
   },
