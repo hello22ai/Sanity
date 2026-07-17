@@ -1,5 +1,7 @@
-import {defineField, defineType} from 'sanity'
-import {ComposeIcon, EarthGlobeIcon} from '@sanity/icons'
+import {defineArrayMember, defineField, defineType} from 'sanity'
+import {ComposeIcon, EarthGlobeIcon, HighlightIcon} from '@sanity/icons'
+import {BodyInput, HighlightDecorator} from '../components/BodyInput'
+import {HtmlEditor} from '../components/HtmlEditor'
 
 export const post = defineType({
   name: 'post',
@@ -70,12 +72,88 @@ export const post = defineType({
       type: 'datetime',
       group: 'content',
     }),
+    // WYSIWYG editor (SunEditor) — WordPress jaisa editing, HTML mein save hota hai.
+    // Website par render: hello22website app/blog/[slug]/page.tsx (.cms-html)
+    defineField({
+      name: 'contentHtml',
+      title: 'Body',
+      type: 'text',
+      group: 'content',
+      description:
+        'Full WYSIWYG editor — paste from Word/Google Docs keeps tables, images and formatting. Images are uploaded to the Sanity CDN automatically.',
+      components: {input: HtmlEditor},
+    }),
+    // Purana Portable Text body — hidden (old posts ka data safe hai); naya content
+    // upar wale WYSIWYG field mein jata hai
     defineField({
       name: 'body',
-      title: 'Body',
+      title: 'Body (old editor)',
       type: 'array',
       group: 'content',
-      of: [{type: 'block'}, {type: 'image', options: {hotspot: true}}],
+      hidden: true,
+      components: {input: BodyInput},
+      of: [
+        defineArrayMember({
+          type: 'block',
+          styles: [
+            {title: 'Normal', value: 'normal'},
+            {title: 'Heading 2', value: 'h2'},
+            {title: 'Heading 3', value: 'h3'},
+            {title: 'Heading 4', value: 'h4'},
+            {title: 'Quote', value: 'blockquote'},
+          ],
+          lists: [
+            {title: 'Bullet', value: 'bullet'},
+            {title: 'Numbered', value: 'number'},
+          ],
+          marks: {
+            decorators: [
+              {title: 'Bold', value: 'strong'},
+              {title: 'Italic', value: 'em'},
+              {title: 'Underline', value: 'underline'},
+              {title: 'Strike', value: 'strike-through'},
+              {title: 'Code', value: 'code'},
+              {
+                title: 'Highlight',
+                value: 'highlight',
+                icon: HighlightIcon,
+                component: HighlightDecorator,
+              },
+            ],
+            annotations: [
+              defineArrayMember({
+                name: 'link',
+                type: 'object',
+                title: 'Link',
+                fields: [
+                  defineField({
+                    name: 'href',
+                    type: 'url',
+                    title: 'URL',
+                    validation: (rule) =>
+                      rule.uri({allowRelative: true, scheme: ['http', 'https', 'mailto', 'tel']}),
+                  }),
+                  defineField({
+                    name: 'blank',
+                    type: 'boolean',
+                    title: 'Open in new tab',
+                    initialValue: true,
+                  }),
+                ],
+              }),
+            ],
+          },
+        }),
+        defineArrayMember({
+          type: 'image',
+          options: {hotspot: true},
+          fields: [
+            defineField({name: 'alt', title: 'Alt Text', type: 'string'}),
+            defineField({name: 'caption', title: 'Caption', type: 'string'}),
+          ],
+        }),
+        defineArrayMember({type: 'table'}),
+      ],
     }),
 
     // ── SEO: Search Engine ───────────────────────────────────
