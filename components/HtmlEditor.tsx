@@ -22,6 +22,43 @@ const BUTTONS = [
   ['codeView', 'fullScreen'],
 ]
 
+// Excel / Word clipboard HTML mein cell ke colors <style> block ki classes
+// (.xl65{background:#FFFF00}) mein hote hain, inline nahi — SunEditor <style>
+// block ko phenk deta hai to colors ud jate the. Ye helper paste se pehle un
+// class-styles ko elements par inline kar deta hai (mso-* junk hata kar).
+function inlineClipboardStyles(html: string): string | null {
+  if (!/<style[\s>]/i.test(html)) return null
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const styleTags = Array.from(doc.querySelectorAll('style'))
+  if (styleTags.length === 0) return null
+  const css = styleTags.map((s) => s.textContent || '').join('\n')
+  const ruleRe = /([^{}]+)\{([^}]*)\}/g
+  let match: RegExpExecArray | null
+  while ((match = ruleRe.exec(css))) {
+    const selector = match[1].trim()
+    if (!selector || selector.startsWith('@')) continue
+    const decls = match[2]
+      .split(';')
+      .map((d) => d.trim())
+      .filter((d) => d && !/^(mso-|tab-stops|page)/i.test(d))
+      .join('; ')
+    if (!decls) continue
+    let targets: Element[]
+    try {
+      targets = Array.from(doc.body.querySelectorAll(selector))
+    } catch {
+      continue // Office ke non-standard selectors skip
+    }
+    for (const el of targets) {
+      // inline style baad mein rakho taaki wo class-styles ko override kare
+      const existing = el.getAttribute('style') || ''
+      el.setAttribute('style', decls + (existing ? '; ' + existing : ''))
+    }
+  }
+  styleTags.forEach((s) => s.remove())
+  return doc.body.innerHTML
+}
+
 // SunEditor apni width target <textarea> se copy karta hai (hidden textarea =
 // ~185px) — isliye 100% force. Baaki rules Studio ke look se blend karne ke liye.
 const STYLE_ID = 'suneditor-studio-css'
@@ -61,7 +98,18 @@ export function HtmlEditor(props: StringInputProps) {
     const editor = suneditor.create(textarea, {
       plugins,
       buttonList: BUTTONS,
-      formats: ['p', 'h2', 'h3', 'h4', 'blockquote'],
+      formats: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'],
+      // Table cells par style/bgcolor rehne do (paste hue Excel/Sheets colors ke
+      // liye). Per-tag list us tag ke defaults REPLACE karti hai, isliye
+      // colspan/rowspan/class bhi yahan dobara likhne pade.
+      attributesWhitelist: {
+        table: 'class|style|width|border|cellpadding|cellspacing',
+        thead: 'class|style',
+        tbody: 'class|style',
+        tr: 'class|style|height',
+        td: 'class|style|colspan|rowspan|width|height|bgcolor|valign|align',
+        th: 'class|style|colspan|rowspan|width|height|bgcolor|valign|align',
+      },
       // width 100% zaroori hai — warna editor hidden textarea jitna patla banta hai
       width: '100%',
       height: '480px',
@@ -101,6 +149,17 @@ export function HtmlEditor(props: StringInputProps) {
       } else if (!isFullScreen) {
         restoreFromFullscreen()
       }
+    }
+
+    // Excel/Word paste: pehle <style> block ke colors inline karo, phir SunEditor
+    // ki apni cleaning (cleanHTML) se guzaro — style attributes upar whitelist
+    // hone ki wajah se bach jate hain
+    editor.onPaste = (e, _cleanData, _maxCharCount, core) => {
+      const raw = (e as ClipboardEvent).clipboardData?.getData('text/html')
+      if (!raw) return true
+      const inlined = inlineClipboardStyles(raw)
+      if (!inlined) return true
+      return core.cleanHTML(inlined, core.pasteTagsWhitelistRegExp, core.pasteTagsBlacklistRegExp)
     }
 
     editor.onChange = (contents: string) => {

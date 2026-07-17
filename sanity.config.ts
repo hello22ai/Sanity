@@ -1,7 +1,6 @@
 import {defineConfig} from 'sanity'
 import {structureTool} from 'sanity/structure'
 import {visionTool} from '@sanity/vision'
-import {table} from '@sanity/table'
 import {schemaTypes} from './schemaTypes'
 import {structure} from './structure'
 import {theme} from './theme'
@@ -18,8 +17,7 @@ export default defineConfig({
 
   theme,
 
-  // table() = body editor mein Table block (grid editing UI ke saath)
-  plugins: [structureTool({structure}), visionTool(), table()],
+  plugins: [structureTool({structure}), visionTool()],
 
   schema: {
     types: schemaTypes,

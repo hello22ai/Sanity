@@ -15,8 +15,6 @@
     "sanity"
   ],
   "dependencies": {
-    "@portabletext/block-tools": "^5.1.11",
-    "@sanity/table": "^3.1.8",
     "@sanity/vision": "^6.5.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
