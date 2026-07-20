@@ -51,6 +51,17 @@ export const post = defineType({
       rows: 3,
       group: 'content',
     }),
+    // Blog cards ke pastel thumbnail ka bada label — khali ho to website title
+    // ko smart-truncate karke use karti hai (hello22website lib/sanity.ts)
+    defineField({
+      name: 'shortTitle',
+      title: 'Card Label',
+      type: 'string',
+      group: 'content',
+      description:
+        'Short punchy label shown on blog card thumbnails, e.g. "Missed Calls = Lost Money" (2–4 words). Leave empty to auto-trim the title.',
+      validation: (rule) => rule.max(30).warning('Keep card labels short — under 30 characters'),
+    }),
     defineField({
       name: 'featureImage',
       title: 'Feature Image',
