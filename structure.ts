@@ -1,10 +1,12 @@
 import type {StructureResolver} from 'sanity/structure'
-import {
-  DocumentsIcon,
-  EditIcon,
-  CheckmarkCircleIcon,
-  ClockIcon,
-} from '@sanity/icons'
+// @sanity/icons v5 ka root entry sirf {Icon, icons} export karta hai — har icon apne
+// subpath par chala gaya hai. Root se named import karne par dev server/build
+// "does not provide an export named 'DocumentsIcon'" ke saath fail hota hai, aur
+// TypeScript ise pakadta nahi kyunki .d.ts me ye naam ab bhi (deprecated) maujood hain.
+import {DocumentsIcon} from '@sanity/icons/Documents'
+import {EditIcon} from '@sanity/icons/Edit'
+import {CheckmarkCircleIcon} from '@sanity/icons/CheckmarkCircle'
+import {ClockIcon} from '@sanity/icons/Clock'
 
 const API_VERSION = '2025-01-01'
 

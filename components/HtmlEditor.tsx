@@ -70,14 +70,132 @@ function ensureStudioCss() {
     .sun-editor{width:100% !important;border-radius:4px;overflow:hidden}
     .sun-editor .se-toolbar{border-radius:4px 4px 0 0}
     .sun-editor .se-resizing-bar{border-radius:0 0 4px 4px}
-    .sun-editor-editable{padding:16px 20px}
+    /* Format button 82px ka tha — "Header 3"/"Blockquote" kat jate the, isliye kabhi pata
+       nahi chalta tha ki cursor kis heading par hai. Ab chauda + accent color. */
+    .sun-editor .se-btn-select.se-btn-tool-format{width:132px}
+    .sun-editor .se-btn-select.se-btn-tool-format .txt{font-weight:700;color:#2771e5}
+    /* left gutter — headings ke saamne H1/H2… ka badge yahan baithta hai */
+    .sun-editor-editable{padding:16px 20px 16px 58px}
     .sun-editor-editable img{max-width:100%;height:auto}
     .sun-editor-editable strong,.sun-editor-editable b{font-weight:700}
     .sun-editor-editable em,.sun-editor-editable i{font-style:italic}
     .sun-editor-editable u{text-decoration:underline}
     .sun-editor-editable s,.sun-editor-editable strike,.sun-editor-editable del{text-decoration:line-through}
+
+    /* ── Heading scale — website (.cms-body) se match karti hai, taaki editor me jo dikhe
+       wahi live page par aaye ─────────────────────────────────────────────────── */
+    .sun-editor-editable p{margin:14px 0;line-height:1.7}
+    .sun-editor-editable h1{font-size:30px;line-height:1.25;font-weight:700;margin:30px 0 10px}
+    .sun-editor-editable h2{font-size:25px;line-height:1.3;font-weight:700;margin:28px 0 10px}
+    .sun-editor-editable h3{font-size:20px;line-height:1.35;font-weight:700;margin:24px 0 8px}
+    .sun-editor-editable h4{font-size:17px;line-height:1.4;font-weight:700;margin:20px 0 8px}
+    .sun-editor-editable blockquote{margin:20px 0;padding:12px 18px;border-left:4px solid #2c76ed;background:rgba(39,113,229,.06);font-weight:600}
+
+    /* Har heading ke saamne uska level badge (CSS only — saved HTML me nahi jata).
+       Isse turant dikhta hai ki kaun si line H2 hai aur kaun si H3. */
+    .sun-editor-editable h1,.sun-editor-editable h2,.sun-editor-editable h3,
+    .sun-editor-editable h4,.sun-editor-editable blockquote{position:relative}
+    .sun-editor-editable h1::before{content:'H1'}
+    .sun-editor-editable h2::before{content:'H2'}
+    .sun-editor-editable h3::before{content:'H3'}
+    .sun-editor-editable h4::before{content:'H4'}
+    .sun-editor-editable blockquote::before{content:'❝'}
+    .sun-editor-editable h1::before,.sun-editor-editable h2::before,.sun-editor-editable h3::before,
+    .sun-editor-editable h4::before,.sun-editor-editable blockquote::before{
+      position:absolute;left:-44px;top:.32em;width:32px;height:18px;
+      font:700 10px/18px -apple-system,system-ui,sans-serif;letter-spacing:.04em;text-align:center;
+      color:#2771e5;background:rgba(39,113,229,.1);border:1px solid rgba(39,113,229,.28);
+      border-radius:4px;user-select:none;pointer-events:none}
+
+    /* ── Lists — bullets ke beech ka gap website jaisa chhota (pehle bahut zyada tha) ── */
+    .sun-editor-editable ul,.sun-editor-editable ol{margin:14px 0;padding-left:26px}
+    .sun-editor-editable ul{list-style:disc}
+    .sun-editor-editable ol{list-style:decimal}
+    .sun-editor-editable li{margin:0 0 4px;line-height:1.65}
+    .sun-editor-editable li>p{margin:0}
+    .sun-editor-editable li>ul,.sun-editor-editable li>ol{margin:4px 0 0}
+
+    /* ── Tables — Excel jaisa look; inline styles (Excel ke apne colors/borders) inhe
+       override karte hain, ye sirf fallback hai ────────────────────────────────── */
+    .sun-editor-editable table{border-collapse:collapse;margin:16px 0;font-size:14px}
+    .sun-editor-editable table td,.sun-editor-editable table th{
+      border:1px solid #c9ccd4;padding:6px 10px;vertical-align:top}
+    .sun-editor-editable table th{background:#f2f4f8;font-weight:700;text-align:left}
+    /* column-resize ke waqt selection highlight na ho */
+    .sun-editor-editable.se-col-resizing,.sun-editor-editable.se-col-resizing *{
+      cursor:col-resize !important;user-select:none !important}
   `
   document.head.appendChild(style)
+}
+
+// ── Table column resize ────────────────────────────────────────────────────
+// SunEditor 2.x me columns drag karke resize karne ki sahulat nahi hai (uska table
+// controller sirf "full width" toggle deta hai). Ye chhota helper cell ke border par
+// col-resize cursor deta hai aur drag par <colgroup> ki widths badal deta hai —
+// Excel/Word jaisa. Widths <col style="width:..px"> me save hoti hain, isliye website
+// par bhi wahi columns dikhte hain.
+const EDGE = 6 // px — border ke aas-paas ka grab zone
+const MIN_COL = 28 // px — isse patla column allow nahi
+
+function cellAt(target: EventTarget | null): HTMLTableCellElement | null {
+  const el = target as HTMLElement | null
+  if (!el || typeof el.closest !== 'function') return null
+  return el.closest('td,th')
+}
+
+// row me is cell se pehle kitne logical columns hain (colspan ginti me)
+function colIndexOf(cell: HTMLTableCellElement): number {
+  const row = cell.parentElement as HTMLTableRowElement | null
+  if (!row) return 0
+  let index = 0
+  for (const c of Array.from(row.cells)) {
+    if (c === cell) break
+    index += c.colSpan || 1
+  }
+  return index
+}
+
+// cursor kis column ke right border par hai? (null = kisi border par nahi)
+function edgeColumnFor(cell: HTMLTableCellElement, clientX: number): number | null {
+  const rect = cell.getBoundingClientRect()
+  const start = colIndexOf(cell)
+  if (clientX >= rect.right - EDGE) return start + (cell.colSpan || 1) - 1
+  if (clientX <= rect.left + EDGE && start > 0) return start - 1
+  return null
+}
+
+// colgroup ko abhi ki rendered widths se dobara banata hai — uske baad har column ki
+// width explicit px me hai, to drag ka asar sirf usi column par padta hai.
+function rebuildCols(table: HTMLTableElement): HTMLTableColElement[] {
+  const row = table.rows[0]
+  if (!row) return []
+  const widths: number[] = []
+  for (const cell of Array.from(row.cells)) {
+    const span = cell.colSpan || 1
+    const each = cell.getBoundingClientRect().width / span
+    for (let i = 0; i < span; i++) widths.push(Math.max(MIN_COL, Math.round(each)))
+  }
+  if (widths.length === 0) return []
+  Array.from(table.children).forEach((child) => {
+    if (child.tagName === 'COLGROUP') child.remove()
+  })
+  const colgroup = document.createElement('colgroup')
+  const cols = widths.map((w) => {
+    const col = document.createElement('col')
+    col.style.width = `${w}px`
+    colgroup.appendChild(col)
+    return col
+  })
+  table.insertBefore(colgroup, table.firstChild)
+  // SunEditor ki apni classes width ko !important se lock karti hain
+  // (.se-table-size-100{width:100%!important}, .se-table-size-auto{width:auto!important}) —
+  // px width chalane ke liye dono hatani padti hain aur sab kuch inline style me rakhna padta hai.
+  // (Controller inhi inline values se apni state padhta hai, isliye wo bhi sahi rehta hai.)
+  table.classList.remove('se-table-size-100', 'se-table-size-auto', 'se-table-layout-auto', 'se-table-layout-fixed')
+  // fixed layout = <col> widths bilkul waise hi lagti hain jaisi set ki hain
+  table.style.tableLayout = 'fixed'
+  table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`
+  return cols
 }
 
 export function HtmlEditor(props: StringInputProps) {
@@ -106,12 +224,21 @@ export function HtmlEditor(props: StringInputProps) {
     const editor = suneditor.create(textarea, {
       plugins,
       buttonList: BUTTONS,
-      formats: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'],
+      // h5/h6 hata diye — website un par koi style nahi deti thi, isliye select karne par
+      // heading "lagti hi nahi" thi. Ab jo yahan chuno wahi live page par milta hai.
+      formats: ['p', 'h1', 'h2', 'h3', 'h4', 'blockquote'],
+      // Excel ki column widths <colgroup>/<col> me aati hain, aur ye dono SunEditor ki
+      // default tag whitelist me nahi hain — isliye paste par columns ki chaudai ud jati
+      // thi. Yahan add karne se paste (pasteTagsWhitelist isi list se banti hai) aur
+      // hamara column-resize dono kaam karte hain.
+      addTagsWhitelist: 'colgroup|col',
       // Table cells par style/bgcolor rehne do (paste hue Excel/Sheets colors ke
       // liye). Per-tag list us tag ke defaults REPLACE karti hai, isliye
       // colspan/rowspan/class bhi yahan dobara likhne pade.
       attributesWhitelist: {
-        table: 'class|style|width|border|cellpadding|cellspacing',
+        table: 'class|style|width|height|border|cellpadding|cellspacing',
+        colgroup: 'class|style|span|width',
+        col: 'class|style|span|width',
         thead: 'class|style',
         tbody: 'class|style',
         tr: 'class|style|height',
@@ -120,8 +247,14 @@ export function HtmlEditor(props: StringInputProps) {
       },
       // width 100% zaroori hai — warna editor hidden textarea jitna patla banta hai
       width: '100%',
-      height: '480px',
-      minHeight: '280px',
+      // Editor ab poori available pane height leta hai (pehle fixed 480px tha aur uske
+      // neeche pane ki jagah bekaar jati thi — poora blog ek chhoti khidki me likhna padta
+      // tha). Viewport se naapa hai, isliye bade screen par bada canvas milta hai; toolbar
+      // upar tika rehta hai kyunki scroll editor ke andar hi hota hai.
+      // Aur zyada jagah chahiye to toolbar ka fullscreen button hai; neeche wali resize bar
+      // se bhi drag karke height badal sakte hain.
+      height: 'calc(100vh - 300px)',
+      minHeight: '440px',
       // Studio ke scroll panes mein sticky toolbar flicker karta hai — off
       stickyToolbar: -1,
       // 'full' dialogs position:fixed use karte hain jo Studio ke transformed
@@ -201,6 +334,60 @@ export function HtmlEditor(props: StringInputProps) {
     // editor se bahar click karte hi (doosra field, doosri jagah) pending save flush
     editor.onBlur = () => flushPending()
 
+    // ── Column resize wiring ────────────────────────────────────────────────
+    const wysiwyg = (editor.core as unknown as {context: {element: {wysiwyg: HTMLElement}}})
+      .context.element.wysiwyg
+    let drag: {col: HTMLTableColElement; table: HTMLTableElement; startX: number; startW: number; startTableW: number} | null = null
+
+    const onDocMove = (e: MouseEvent) => {
+      if (!drag) return
+      e.preventDefault()
+      const width = Math.max(MIN_COL, drag.startW + (e.clientX - drag.startX))
+      drag.col.style.width = `${Math.round(width)}px`
+      drag.table.style.width = `${Math.round(drag.startTableW + (width - drag.startW))}px`
+    }
+    const onDocUp = () => {
+      if (!drag) return
+      drag = null
+      wysiwyg.classList.remove('se-col-resizing')
+      document.removeEventListener('mousemove', onDocMove)
+      document.removeEventListener('mouseup', onDocUp)
+      // undo stack + onChange dono — history.push andar se core.functions.onChange call karta hai
+      editor.core.history.push(false)
+    }
+
+    // hover par border ke upar col-resize cursor
+    const onEditorMove = (e: MouseEvent) => {
+      if (drag) return
+      const cell = cellAt(e.target)
+      const column = cell ? edgeColumnFor(cell, e.clientX) : null
+      wysiwyg.style.cursor = column == null ? '' : 'col-resize'
+    }
+    const onEditorDown = (e: MouseEvent) => {
+      if (e.button !== 0 || readOnlyRef.current) return
+      const cell = cellAt(e.target)
+      if (!cell) return
+      const column = edgeColumnFor(cell, e.clientX)
+      if (column == null) return
+      const table = cell.closest('table')
+      if (!table) return
+      const col = rebuildCols(table)[column]
+      if (!col) return
+      e.preventDefault() // caret jump / text selection rok do
+      drag = {
+        col,
+        table,
+        startX: e.clientX,
+        startW: parseFloat(col.style.width) || MIN_COL,
+        startTableW: parseFloat(table.style.width) || table.getBoundingClientRect().width,
+      }
+      wysiwyg.classList.add('se-col-resizing')
+      document.addEventListener('mousemove', onDocMove)
+      document.addEventListener('mouseup', onDocUp)
+    }
+    wysiwyg.addEventListener('mousemove', onEditorMove)
+    wysiwyg.addEventListener('mousedown', onEditorDown)
+
     // browser tab/window band karne par agar save pending ho to warn karo
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (pendingRef.current != null) {
@@ -229,6 +416,10 @@ export function HtmlEditor(props: StringInputProps) {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      wysiwyg.removeEventListener('mousemove', onEditorMove)
+      wysiwyg.removeEventListener('mousedown', onEditorDown)
+      document.removeEventListener('mousemove', onDocMove)
+      document.removeEventListener('mouseup', onDocUp)
       // doosre document/page par jaane se pehle aakhri change save kar do
       flushPending()
       window.clearTimeout(debounceTimer.current)
